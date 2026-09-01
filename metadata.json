@@ -1,0 +1,6 @@
+{
+  "name": "HeatShield AI",
+  "description": "Know the heat. Stay safe. Real-time location-based heat and weather monitor.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
