@@ -671,7 +671,7 @@ export function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lo
 
 /**
  * Resolves the appropriate Indian municipal city data based on user location
- * Priority: Exact city/state/name match -> Nearest coordinates -> Default city (Hyderabad)
+ * Priority: GPS Coordinates Proximity (<80km) -> Exact city name/alias match -> Fallback default city
  */
 export function findMatchingOrNearestCity(location?: {
   latitude?: number;
@@ -684,40 +684,15 @@ export function findMatchingOrNearestCity(location?: {
     return INDIAN_CITIES.find((c) => c.id === 'hyderabad') || INDIAN_CITIES[0];
   }
 
-  const queryTerms = [
-    location.city?.toLowerCase(),
-    location.state?.toLowerCase(),
-    location.locationName?.toLowerCase(),
-  ].filter(Boolean) as string[];
-
-  // 1. Text match against city name, ID, state or alias
-  for (const city of INDIAN_CITIES) {
-    const cityName = city.name.toLowerCase();
-    const cityId = city.id.toLowerCase();
-    const cityState = city.state.toLowerCase();
-
-    for (const term of queryTerms) {
-      if (
-        term === cityName ||
-        term === cityId ||
-        term.includes(cityName) ||
-        cityName.includes(term) ||
-        term.includes(cityId) ||
-        term.includes(cityState) ||
-        (cityId === 'delhi' && (term.includes('delhi') || term.includes('noida') || term.includes('gurgaon') || term.includes('gurugram'))) ||
-        (cityId === 'bengaluru' && term.includes('bangalore')) ||
-        (cityId === 'kolkata' && term.includes('calcutta')) ||
-        (cityId === 'mumbai' && term.includes('bombay')) ||
-        (cityId === 'chennai' && term.includes('madras')) ||
-        (cityId === 'ahmedabad' && term.includes('ahmadabad'))
-      ) {
-        return city;
-      }
-    }
-  }
-
-  // 2. Spatial proximity match using GPS coordinates
-  if (typeof location.latitude === 'number' && typeof location.longitude === 'number' && !isNaN(location.latitude) && !isNaN(location.longitude)) {
+  // 1. Spatial proximity match using GPS coordinates (highest accuracy)
+  if (
+    typeof location.latitude === 'number' &&
+    typeof location.longitude === 'number' &&
+    !isNaN(location.latitude) &&
+    !isNaN(location.longitude) &&
+    location.latitude !== 0 &&
+    location.longitude !== 0
+  ) {
     let closestCity = INDIAN_CITIES[0];
     let minDistance = Infinity;
 
@@ -728,14 +703,57 @@ export function findMatchingOrNearestCity(location?: {
         closestCity = city;
       }
     }
-    return closestCity;
+    // If within metropolitan proximity (<80km) of an Indian municipal region, return that municipality
+    if (minDistance <= 80) {
+      return closestCity;
+    }
   }
 
-  return INDIAN_CITIES.find((c) => c.id === 'hyderabad') || INDIAN_CITIES[0];
+  const queryTerms = [
+    location.city?.toLowerCase(),
+    location.locationName?.toLowerCase(),
+  ].filter(Boolean) as string[];
+
+  // 2. Exact text match against city name, ID, or direct aliases
+  for (const city of INDIAN_CITIES) {
+    const cityName = city.name.toLowerCase();
+    const cityId = city.id.toLowerCase();
+
+    for (const term of queryTerms) {
+      if (
+        term === cityName ||
+        term === cityId ||
+        term.startsWith(cityName) ||
+        cityName.startsWith(term) ||
+        (cityId === 'delhi' && (term.includes('delhi') || term.includes('noida') || term.includes('gurgaon') || term.includes('gurugram'))) ||
+        (cityId === 'bengaluru' && (term.includes('bangalore') || term.includes('bengaluru'))) ||
+        (cityId === 'kolkata' && (term.includes('calcutta') || term.includes('kolkata'))) ||
+        (cityId === 'mumbai' && (term.includes('bombay') || term.includes('mumbai') || term.includes('navi mumbai') || term.includes('thane'))) ||
+        (cityId === 'chennai' && (term.includes('madras') || term.includes('chennai'))) ||
+        (cityId === 'ahmedabad' && (term.includes('ahmedabad') || term.includes('ahmadabad'))) ||
+        (cityId === 'hyderabad' && (term.includes('hyderabad') || term.includes('secunderabad') || term.includes('cyberabad')))
+      ) {
+        return city;
+      }
+    }
+  }
+
+  // 3. If outside the 7 detailed municipal ward zones, return location-specific CityData with empty wards
+  const resolvedName = location.city || location.locationName?.split(',')[0] || 'Local Region';
+  return {
+    id: `unmapped_${resolvedName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+    name: resolvedName,
+    state: location.state || '',
+    lat: location.latitude || 17.385,
+    lng: location.longitude || 78.4867,
+    elevationMeters: 50,
+    baselineHistoricalMortalityThreshold: 40.0,
+    wards: [],
+  };
 }
 
 /**
- * Identifies the nearest or containing municipal ward for specific geographic coordinates
+ * Identifies the containing municipal ward for specific geographic coordinates using spatial boundary radius
  */
 export function findNearestWardForCoordinates(
   city: CityData,
@@ -747,7 +765,7 @@ export function findNearestWardForCoordinates(
     return null;
   }
 
-  // 1. Text-based heuristic if locationName specifies an exact neighborhood
+  // 1. Text-based heuristic if locationName explicitly matches a specific ward/neighborhood
   if (locationName) {
     const locLower = locationName.toLowerCase();
     for (const ward of city.wards) {
@@ -767,7 +785,7 @@ export function findNearestWardForCoordinates(
     }
   }
 
-  // 2. Spatial proximity match using GPS coordinates
+  // 2. Spatial proximity match using GPS coordinates and realistic ward boundary radius
   let closestWard = null;
   let minDistance = Infinity;
 
@@ -779,9 +797,17 @@ export function findNearestWardForCoordinates(
     }
   }
 
-  // Only return ward if within 25km radius of ward centroid
-  if (minDistance <= 25 && closestWard) {
-    return closestWard;
+  if (closestWard) {
+    // A municipal ward typically spans 1.5 to 3.2 km in radius based on area
+    const estimatedWardRadiusKm = Math.min(
+      3.2,
+      Math.max(1.5, Math.sqrt((closestWard.areaSqKm || 4.0) / Math.PI) * 1.35)
+    );
+
+    // Only return the ward if the GPS coordinates are strictly within its spatial boundary radius
+    if (minDistance <= estimatedWardRadiusKm) {
+      return closestWard;
+    }
   }
 
   return null;

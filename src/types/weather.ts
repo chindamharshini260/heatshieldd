@@ -11,7 +11,7 @@ export interface UserLocation {
   city?: string;
   state?: string;
   country?: string;
-  source: 'gps' | 'search' | 'map' | 'saved';
+  source: 'gps' | 'search' | 'map' | 'saved' | 'fallback';
   timestamp: string; // ISO string
 }
 

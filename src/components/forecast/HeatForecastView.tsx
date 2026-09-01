@@ -192,40 +192,6 @@ export const HeatForecastView: React.FC<HeatForecastViewProps> = ({
         </div>
       </div>
 
-      {/* 2. PEAK-RISK PERIOD HIGHLIGHT BANNER */}
-      <div className="rounded-2xl border border-rose-200 bg-gradient-to-r from-rose-50/90 via-orange-50/80 to-amber-50/60 p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-start gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-md">
-            <Flame className="w-5 h-5" />
-          </div>
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-black uppercase tracking-wider text-rose-800">
-                Peak Hazard Alert Window
-              </span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-600 text-white shadow-2xs">
-                {activeProfile.peakRiskPeriod.urgency}
-              </span>
-            </div>
-            <h3 className="text-base sm:text-lg font-black text-[#17233C]">
-              {activeProfile.ward.wardName}: Peak thermal strain expected{' '}
-              <span className="text-rose-700 underline decoration-rose-400 underline-offset-2">
-                {activeProfile.peakRiskPeriod.windowText}
-              </span>
-            </h3>
-            <p className="text-xs text-[#64748B]">
-              Peak UTCI: <strong className="text-[#17233C]">{activeProfile.peakRiskPeriod.peakUtci}°C</strong> (Category: {activeProfile.peakRiskPeriod.peakCategory}) • High heatstroke risk for outdoor laborers & seniors.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 self-start md:self-auto shrink-0">
-          <span className="text-xs font-bold text-rose-800 bg-white/80 px-3 py-1.5 rounded-xl border border-rose-200 shadow-2xs">
-            Effective Max: {activeProfile.currentConditions.effectiveTemperature}°C
-          </span>
-        </div>
-      </div>
-
       {/* 3. 5-DAY INTERACTIVE HORIZONTAL CARDS */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">

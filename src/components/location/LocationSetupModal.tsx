@@ -110,7 +110,7 @@ export const LocationSetupModal: React.FC<LocationSetupModalProps> = ({
       {
         enableHighAccuracy: true,
         timeout: 10000,
-        maximumAge: 60000,
+        maximumAge: 0, // Force fresh coordinates from the device sensor
       }
     );
   };

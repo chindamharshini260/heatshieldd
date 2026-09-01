@@ -4,13 +4,9 @@ import {
   Info,
   ChevronDown,
   ChevronUp,
-  AlertTriangle,
-  Users,
-  Sun,
   Shield,
   Activity,
-  Flame,
-  Thermometer,
+  AlertTriangle,
 } from 'lucide-react';
 import { DailyMortalityRiskItem } from '../../utils/mortalityRiskEngine';
 
@@ -33,13 +29,13 @@ export const HealthImpactMortalitySection: React.FC<HealthImpactMortalitySection
   const selectedDay = forecastItems[selectedDayIdx] || forecastItems[0];
 
   return (
-    <div className="bg-white rounded-2xl border border-[#E2E8F0] p-6 shadow-xs space-y-6">
+    <div id="health-impact-mortality-section" className="bg-white rounded-2xl border border-[#E2E8F0] p-6 shadow-xs space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E2E8F0] pb-4">
         <div>
           <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 text-[11px] font-semibold border border-rose-100">
             <HeartPulse className="w-3.5 h-3.5 text-rose-600" />
-            <span>Biometeorological & Health Impact Assessment</span>
+            <span>ESTIMATED HEAT-RELATED HEALTH RISK</span>
           </div>
           <h2 className="text-lg sm:text-xl font-bold text-[#17233C] tracking-tight mt-1.5">
             HEALTH IMPACT & MORTALITY RISK FORECAST
@@ -62,6 +58,17 @@ export const HealthImpactMortalitySection: React.FC<HealthImpactMortalitySection
             <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
           )}
         </button>
+      </div>
+
+      {/* Required Scientific Disclaimer Banner */}
+      <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200/80 flex items-start gap-2.5 text-xs text-amber-900">
+        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+        <div className="space-y-0.5">
+          <p className="font-semibold text-amber-950">Model-Derived Health Estimation</p>
+          <p className="text-amber-800 text-[11.5px] leading-relaxed">
+            Model-derived estimate based on thermal stress and population vulnerability. It is not a clinical diagnosis or observed mortality count.
+          </p>
+        </div>
       </div>
 
       {/* Methodology Accordion */}
@@ -107,32 +114,48 @@ export const HealthImpactMortalitySection: React.FC<HealthImpactMortalitySection
 
             <div className="p-2.5 rounded-lg bg-white border border-rose-200 bg-rose-50/40 flex flex-col">
               <span className="text-[10px] font-bold uppercase text-rose-500">Output</span>
-              <span className="font-bold text-rose-900 mt-0.5">Health Impact</span>
+              <span className="font-bold text-rose-900 mt-0.5">Health Risk</span>
               <span className="text-[11px] text-rose-700 mt-1 leading-snug">
                 Estimated Health & Mortality Risk (0-100)
               </span>
             </div>
           </div>
-
-          <div className="p-3 rounded-lg bg-blue-50/60 border border-blue-100 text-[#1E3A8A] text-[11px] leading-relaxed">
-            <strong>Scientific Disclosure:</strong> The score represents an{' '}
-            <strong>Estimated Heat-Related Health Risk</strong> index computed from multi-parameter
-            biometeorological equilibrium models and local socio-demographic sensitivity factors. It
-            serves as an early operational public-health indicator for medical preparedness and
-            preventive heat action rather than an empirical post-hoc mortality census.
-          </div>
         </div>
       )}
+
+      {/* 5-Day Forecast Navigation Tabs */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-slate-100">
+        {forecastItems.map((item, idx) => {
+          const isSelected = idx === selectedDayIdx;
+          return (
+            <button
+              key={`tab-${item.date}`}
+              onClick={() => setSelectedDayIdx(idx)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                isSelected
+                  ? 'bg-[#17233C] text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              <span>{item.dayLabel || (idx === 0 ? 'TODAY' : `DAY ${idx + 1}`)}</span>
+              <span
+                className="w-2 h-2 rounded-full inline-block"
+                style={{ backgroundColor: item.color }}
+              />
+            </button>
+          );
+        })}
+      </div>
 
       {/* 5-Day Forecast Table (Desktop) */}
       <div className="hidden md:block overflow-x-auto rounded-xl border border-[#E2E8F0]">
         <table className="w-full text-left text-xs border-collapse">
           <thead>
             <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[#64748B] font-semibold">
-              <th className="py-3 px-4">Day</th>
+              <th className="py-3 px-4">Timeline</th>
               <th className="py-3 px-4">Thermal Stress</th>
-              <th className="py-3 px-4">Vulnerability Level</th>
-              <th className="py-3 px-4">Mortality Risk Score</th>
+              <th className="py-3 px-4">Vulnerability</th>
+              <th className="py-3 px-4">Health Risk / Mortality Score</th>
               <th className="py-3 px-4">Risk Category</th>
               <th className="py-3 px-4">Expected Health Impact</th>
             </tr>
@@ -148,44 +171,52 @@ export const HealthImpactMortalitySection: React.FC<HealthImpactMortalitySection
                     isSelected ? 'bg-blue-50/40 font-medium' : ''
                   }`}
                 >
-                  {/* Day */}
+                  {/* Timeline (TODAY | DAY 2 | etc.) */}
                   <td className="py-3.5 px-4">
-                    <div className="font-bold text-[#17233C]">{item.dayName}</div>
-                    <div className="text-[11px] text-[#64748B] font-normal">{item.date}</div>
+                    <div className="font-bold text-[#17233C]">
+                      {item.dayLabel || (idx === 0 ? 'TODAY' : `DAY ${idx + 1}`)}
+                    </div>
+                    <div className="text-[11px] text-[#64748B] font-normal">
+                      {item.dayName} ({item.date})
+                    </div>
                   </td>
 
                   {/* Thermal Stress */}
                   <td className="py-3.5 px-4">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-semibold text-[#17233C]">{item.thermalStressCategory}</span>
-                    </div>
+                    <div className="font-semibold text-[#17233C]">{item.thermalStressCategory}</div>
                     <div className="text-[11px] text-[#64748B] font-normal">
-                      {item.maxTemp}°C • UTCI {item.utci}°C
+                      Max {item.maxTemp}°C • UTCI {item.utci}°C
                     </div>
                   </td>
 
-                  {/* Vulnerability Level */}
+                  {/* Vulnerability */}
                   <td className="py-3.5 px-4">
                     <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-slate-100 text-slate-700">
                       {item.vulnerabilityLevel}
                     </span>
+                    <div className="text-[10px] text-[#64748B] mt-0.5 max-w-[140px] truncate" title={item.vulnerabilityFactors.join(', ')}>
+                      {item.vulnerabilityFactors[0] || 'Standard baseline'}
+                    </div>
                   </td>
 
-                  {/* Mortality Risk Score */}
+                  {/* Health Risk / Estimated Mortality Risk Score */}
                   <td className="py-3.5 px-4">
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-sm text-[#17233C] tabular-nums">
-                        {item.mortalityRiskScore}/100
+                        {item.healthRiskScore}/100
                       </span>
                       <div className="w-16 bg-[#E2E8F0] h-1.5 rounded-full overflow-hidden">
                         <div
                           className="h-full rounded-full"
                           style={{
-                            width: `${item.mortalityRiskScore}%`,
+                            width: `${item.healthRiskScore}%`,
                             backgroundColor: item.color,
                           }}
                         />
                       </div>
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-normal">
+                      Estimated Mortality Risk
                     </div>
                   </td>
 
@@ -230,8 +261,11 @@ export const HealthImpactMortalitySection: React.FC<HealthImpactMortalitySection
             >
               <div className="flex items-center justify-between">
                 <div>
+                  <span className="text-xs font-bold text-blue-800 uppercase tracking-wider block">
+                    {item.dayLabel || (idx === 0 ? 'TODAY' : `DAY ${idx + 1}`)}
+                  </span>
                   <span className="text-sm font-bold text-[#17233C]">{item.dayName}</span>
-                  <span className="text-xs text-[#64748B] ml-2">({item.date})</span>
+                  <span className="text-xs text-[#64748B] ml-1.5">({item.date})</span>
                 </div>
                 <span
                   className="px-2.5 py-0.5 rounded-full text-[11px] font-bold border"
@@ -249,7 +283,7 @@ export const HealthImpactMortalitySection: React.FC<HealthImpactMortalitySection
                 <div>
                   <div className="text-[10px] text-[#64748B]">Thermal Stress</div>
                   <div className="font-semibold text-[#17233C]">{item.thermalStressCategory}</div>
-                  <div className="text-[10px] text-slate-500">{item.maxTemp}°C</div>
+                  <div className="text-[10px] text-slate-500">{item.maxTemp}°C • UTCI {item.utci}°C</div>
                 </div>
 
                 <div>
@@ -258,9 +292,9 @@ export const HealthImpactMortalitySection: React.FC<HealthImpactMortalitySection
                 </div>
 
                 <div>
-                  <div className="text-[10px] text-[#64748B]">Risk Score</div>
+                  <div className="text-[10px] text-[#64748B]">Health / Mortality Risk</div>
                   <div className="font-bold text-[#17233C] tabular-nums">
-                    {item.mortalityRiskScore}/100
+                    {item.healthRiskScore}/100
                   </div>
                 </div>
               </div>
@@ -280,17 +314,17 @@ export const HealthImpactMortalitySection: React.FC<HealthImpactMortalitySection
             <div className="flex items-center gap-2">
               <Activity className="w-4 h-4 text-rose-600" />
               <span className="font-bold text-[#17233C]">
-                {selectedDay.dayName} Focus Summary ({selectedDay.date})
+                {selectedDay.dayLabel || (selectedDayIdx === 0 ? 'TODAY' : `DAY ${selectedDayIdx + 1}`)} Focus Summary ({selectedDay.dayName}, {selectedDay.date})
               </span>
               <span
-                className="text-[10px] font-bold px-2 py-0.2 rounded-full border"
+                className="text-[10px] font-bold px-2 py-0.5 rounded-full border"
                 style={{
                   backgroundColor: selectedDay.badgeBg,
                   color: selectedDay.color,
                   borderColor: selectedDay.badgeBorder,
                 }}
               >
-                Score: {selectedDay.mortalityRiskScore}/100
+                Estimated Health Risk: {selectedDay.healthRiskScore}/100
               </span>
             </div>
             <p className="text-slate-600 leading-relaxed max-w-2xl">

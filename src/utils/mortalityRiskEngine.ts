@@ -13,6 +13,7 @@ import { computeUTCI, computeWBGT, computeHeatIndex } from './heatHealthEngine';
 export interface DailyMortalityRiskItem {
   dayIndex: number;
   dayName: string;
+  dayLabel: string; // 'TODAY' | 'DAY 2' | 'DAY 3' | 'DAY 4' | 'DAY 5'
   date: string;
   maxTemp: number;
   minTemp: number;
@@ -21,7 +22,8 @@ export interface DailyMortalityRiskItem {
   heatIndex: number;
   thermalStressCategory: 'Low' | 'Moderate' | 'High' | 'Very High' | 'Extreme';
   vulnerabilityLevel: 'Low' | 'Moderate' | 'High' | 'Very High';
-  mortalityRiskScore: number; // 0 - 100
+  healthRiskScore: number; // 0 - 100
+  mortalityRiskScore: number; // 0 - 100 (synonym for consistent consumption)
   riskCategory: 'Low' | 'Moderate' | 'High' | 'Very High' | 'Extreme';
   expectedHealthImpact: string;
   vulnerabilityFactors: string[];
@@ -40,10 +42,10 @@ export function calculate5DayHealthImpactForecast(
   }
 
   const dailyItems = weatherData.daily.slice(0, 5);
-  const currentTemp = weatherData.current?.temperature || 38;
-  const currentRh = weatherData.current?.relativeHumidity || 45;
-  const currentWind = weatherData.current?.windSpeed || 8;
-  const currentSolar = typeof weatherData.current?.solarRadiation === 'number'
+  const currentTemp = weatherData.current?.temperature ?? 38;
+  const currentRh = weatherData.current?.relativeHumidity ?? 45;
+  const currentWind = weatherData.current?.windSpeed ?? 8;
+  const currentSolar = typeof weatherData.current?.solarRadiation === 'number' && !isNaN(weatherData.current.solarRadiation)
     ? weatherData.current.solarRadiation
     : 650;
 
@@ -52,7 +54,7 @@ export function calculate5DayHealthImpactForecast(
   let vulnLevel: 'Low' | 'Moderate' | 'High' | 'Very High' = 'Moderate';
   const vulnFactors: string[] = [];
 
-  if (topRiskWard) {
+  if (topRiskWard && topRiskWard.ward) {
     const ward = topRiskWard.ward;
     if (ward.elderlyRatio > 0.11) {
       baseVulnScore += 5;
@@ -89,10 +91,11 @@ export function calculate5DayHealthImpactForecast(
     const maxT = day.temperatureMax;
     const minT = day.temperatureMin;
     const isToday = idx === 0;
+    const dayLabel = isToday ? 'TODAY' : `DAY ${idx + 1}`;
 
-    // Use daily weather code to estimate humidity and solar radiation
-    const estRh = Math.max(25, Math.min(75, Math.round(currentRh + (idx > 0 ? (day.weatherCode > 0 ? 12 : -4) : 0))));
-    const estWind = Math.max(5, Math.round(currentWind + (idx % 2 === 0 ? 1.5 : -1.0)));
+    // Estimate daily meteorological parameters from forecast
+    const estRh = Math.max(20, Math.min(80, Math.round(currentRh + (idx > 0 ? (day.weatherCode > 0 ? 10 : -3) : 0))));
+    const estWind = Math.max(4, Math.round(currentWind + (idx % 2 === 0 ? 1.0 : -0.5)));
     const estSolar = day.weatherCode === 0 ? 780 : day.weatherCode <= 2 ? 580 : 350;
 
     const utci = computeUTCI(maxT, estRh, estWind, estSolar);
@@ -143,7 +146,7 @@ export function calculate5DayHealthImpactForecast(
     // 4. Cumulative Heat Persistence Penalty (0 - 15 pts)
     const persistencePenalty = Math.min(15, consecutiveHotDays * 3.5);
 
-    // 5. Aggregate Mortality Risk Score (0 - 100)
+    // 5. Aggregate Health & Mortality Risk Score (0 - 100)
     // Derived from: Thermal Strain (50%) + Vulnerability (25%) + Night Strain & Persistence (25%)
     const rawTotal =
       thermalStrainScore * 0.95 +
@@ -151,7 +154,7 @@ export function calculate5DayHealthImpactForecast(
       nightPenalty * 0.75 +
       persistencePenalty * 0.6;
 
-    const mortalityRiskScore = Math.max(5, Math.min(98, Math.round(rawTotal)));
+    const riskScore = Math.max(5, Math.min(98, Math.round(rawTotal)));
 
     // 6. Category mapping
     let riskCategory: 'Low' | 'Moderate' | 'High' | 'Very High' | 'Extreme' = 'Low';
@@ -159,22 +162,22 @@ export function calculate5DayHealthImpactForecast(
     let badgeBg = '#F0FDF4';
     let badgeBorder = '#BBF7D0';
 
-    if (mortalityRiskScore >= 80) {
+    if (riskScore >= 80) {
       riskCategory = 'Extreme';
       color = '#B91C1C';
       badgeBg = '#FEF2F2';
       badgeBorder = '#FECACA';
-    } else if (mortalityRiskScore >= 60) {
+    } else if (riskScore >= 60) {
       riskCategory = 'Very High';
       color = '#DC2626';
       badgeBg = '#FEF2F2';
       badgeBorder = '#FECACA';
-    } else if (mortalityRiskScore >= 40) {
+    } else if (riskScore >= 40) {
       riskCategory = 'High';
       color = '#EA580C';
       badgeBg = '#FFF7ED';
       badgeBorder = '#FED7AA';
-    } else if (mortalityRiskScore >= 20) {
+    } else if (riskScore >= 20) {
       riskCategory = 'Moderate';
       color = '#D97706';
       badgeBg = '#FFFBEB';
@@ -208,6 +211,7 @@ export function calculate5DayHealthImpactForecast(
     return {
       dayIndex: idx,
       dayName: isToday ? 'Today' : day.dayName,
+      dayLabel,
       date: day.date,
       maxTemp: Math.round(maxT),
       minTemp: Math.round(minT),
@@ -216,7 +220,8 @@ export function calculate5DayHealthImpactForecast(
       heatIndex: Math.round(heatIndex),
       thermalStressCategory,
       vulnerabilityLevel: vulnLevel,
-      mortalityRiskScore,
+      healthRiskScore: riskScore,
+      mortalityRiskScore: riskScore,
       riskCategory,
       expectedHealthImpact,
       vulnerabilityFactors: vulnFactors,
@@ -226,3 +231,4 @@ export function calculate5DayHealthImpactForecast(
     };
   });
 }
+

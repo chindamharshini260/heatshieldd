@@ -5,8 +5,9 @@
  * COST Action 730 UTCI, and physiological modeling assumptions.
  */
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { CompleteWeatherData } from '../../types/weather';
+import { findMatchingOrNearestCity, findNearestWardForCoordinates } from '../../data/cityData';
 import {
   Cpu,
   Database,
@@ -27,6 +28,20 @@ interface DataAndScienceViewProps {
 export function DataAndScienceView({ weatherData }: DataAndScienceViewProps) {
   const analysis = weatherData?.analysis;
 
+  const activeCity = useMemo(() => {
+    return findMatchingOrNearestCity(weatherData?.location);
+  }, [weatherData?.location]);
+
+  const detectedWard = useMemo(() => {
+    if (!weatherData?.location) return null;
+    return findNearestWardForCoordinates(
+      activeCity,
+      weatherData.location.latitude,
+      weatherData.location.longitude,
+      weatherData.location.locationName
+    );
+  }, [activeCity, weatherData?.location]);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -41,6 +56,84 @@ export function DataAndScienceView({ weatherData }: DataAndScienceViewProps) {
         <p className="text-sm sm:text-base font-normal text-slate-500 mt-1">
           How HeatShield AI translates raw meteorological streams into accurate human physiological heat risk.
         </p>
+      </div>
+
+      {/* DEVELOPER / DEBUG VERIFICATION AREA */}
+      <div className="bg-slate-900 text-slate-100 rounded-2xl p-5 border border-slate-800 shadow-md space-y-3 font-mono text-xs">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span className="font-bold text-emerald-400 text-xs tracking-wider uppercase">
+              Developer & GPS Verification Panel
+            </span>
+          </div>
+          <span className="text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded">
+            Live Diagnostics
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60">
+            <div className="text-slate-400 text-[11px]">GPS Latitude</div>
+            <div className="text-sm font-bold text-white mt-0.5">
+              {weatherData?.location.latitude !== undefined ? `${weatherData.location.latitude.toFixed(6)}°` : 'N/A'}
+            </div>
+          </div>
+
+          <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60">
+            <div className="text-slate-400 text-[11px]">GPS Longitude</div>
+            <div className="text-sm font-bold text-white mt-0.5">
+              {weatherData?.location.longitude !== undefined ? `${weatherData.location.longitude.toFixed(6)}°` : 'N/A'}
+            </div>
+          </div>
+
+          <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60">
+            <div className="text-slate-400 text-[11px]">Location Source</div>
+            <div className="text-sm font-bold text-white mt-0.5 flex items-center gap-1.5">
+              <span className={`w-2 h-2 rounded-full ${weatherData?.location.source === 'gps' ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
+              <span>{weatherData?.location.source === 'gps' ? 'Browser GPS' : weatherData?.location.source === 'fallback' ? 'Fallback' : 'Manual Search'}</span>
+            </div>
+          </div>
+
+          <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60">
+            <div className="text-slate-400 text-[11px]">Resolved Location</div>
+            <div className="text-sm font-bold text-white mt-0.5 truncate">
+              {weatherData?.location.locationName || 'Unresolved'}
+            </div>
+          </div>
+
+          <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60">
+            <div className="text-slate-400 text-[11px]">Resolved City / Region</div>
+            <div className="text-sm font-bold text-white mt-0.5 truncate">
+              {activeCity?.name || 'Local Region'}
+            </div>
+          </div>
+
+          <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60">
+            <div className="text-slate-400 text-[11px]">Detected Ward</div>
+            <div className="text-sm font-bold text-white mt-0.5 truncate">
+              {detectedWard ? detectedWard.wardName : 'Exact ward boundary data unavailable'}
+            </div>
+          </div>
+
+          <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60">
+            <div className="text-slate-400 text-[11px]">Weather Coordinates</div>
+            <div className="text-sm font-bold text-emerald-300 mt-0.5">
+              {weatherData?.location.latitude !== undefined && weatherData?.location.longitude !== undefined
+                ? `${weatherData.location.latitude.toFixed(4)}°N, ${weatherData.location.longitude.toFixed(4)}°E`
+                : 'N/A'}
+            </div>
+          </div>
+
+          <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60 sm:col-span-2">
+            <div className="text-slate-400 text-[11px]">Ward Data Source</div>
+            <div className="text-sm font-bold text-slate-200 mt-0.5">
+              {detectedWard
+                ? `Municipal Spatial Boundary Grid & Microclimate Sensor Engine (${activeCity.name})`
+                : 'Regional Meteorological Grid (Outside Municipal Detailed Ward Centroid)'}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Real Live Metrics Snapshot */}

@@ -397,6 +397,40 @@ export async function reverseGeocode(latitude: number, longitude: number): Promi
   state?: string;
   country?: string;
 }> {
+  // 1. Try BigDataCloud reverse geocoding client (fast, non-rate-limited, structured)
+  try {
+    const bdcUrl = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`;
+    const res = await fetch(bdcUrl);
+    if (res.ok) {
+      const data = await res.json();
+      if (data) {
+        const locality = data.locality || data.localityInfo?.administrative?.[3]?.name || '';
+        const city = data.city || data.localityInfo?.administrative?.[2]?.name || data.principalSubdivision || 'Detected City';
+        const state = data.principalSubdivision || '';
+        const country = data.countryName || 'India';
+
+        let name = locality;
+        if (locality && city && locality !== city) {
+          name = `${locality}, ${city}`;
+        } else if (!name) {
+          name = city;
+        }
+
+        if (name) {
+          return {
+            locationName: name,
+            city,
+            state,
+            country,
+          };
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('BigDataCloud reverse geocode failed, falling back to OSM Nominatim', err);
+  }
+
+  // 2. Fallback to OpenStreetMap Nominatim
   try {
     const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=14&addressdetails=1`;
     const res = await fetch(url, {
@@ -417,10 +451,9 @@ export async function reverseGeocode(latitude: number, longitude: number): Promi
           addr.village ||
           addr.town ||
           addr.city ||
-          addr.county ||
           '';
 
-        const city = addr.city || addr.town || addr.county || addr.state_district || 'Selected Location';
+        const city = addr.city || addr.town || addr.municipality || addr.county || addr.state_district || 'Selected Location';
         const state = addr.state || '';
         const country = addr.country || 'India';
 
@@ -440,13 +473,13 @@ export async function reverseGeocode(latitude: number, longitude: number): Promi
       }
     }
   } catch (err) {
-    console.warn('Primary reverse geocoding failed, trying fallback', err);
+    console.warn('Nominatim reverse geocoding failed', err);
   }
 
-  // Fallback to coordinates label
+  // 3. Fallback to coordinate representation
   return {
-    locationName: `${latitude.toFixed(3)}°N, ${longitude.toFixed(3)}°E`,
-    city: 'Selected Area',
+    locationName: `${latitude.toFixed(4)}°N, ${longitude.toFixed(4)}°E`,
+    city: `${latitude.toFixed(2)}°N, ${longitude.toFixed(2)}°E`,
     country: 'India',
   };
 }

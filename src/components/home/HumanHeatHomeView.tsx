@@ -59,6 +59,9 @@ interface HumanHeatHomeViewProps {
   isRefreshing: boolean;
   error: string | null;
   onRefresh: () => void;
+  onRequestGps?: () => void;
+  isLocatingGPS?: boolean;
+  gpsStatusMessage?: string | null;
   onChangeLocation: () => void;
   onNavigateToForecast: () => void;
   onNavigateToMap: () => void;
@@ -74,6 +77,9 @@ export const HumanHeatHomeView: React.FC<HumanHeatHomeViewProps> = ({
   isRefreshing,
   error,
   onRefresh,
+  onRequestGps,
+  isLocatingGPS = false,
+  gpsStatusMessage,
   onChangeLocation,
   onNavigateToForecast,
   onNavigateToMap,
@@ -226,80 +232,64 @@ export const HumanHeatHomeView: React.FC<HumanHeatHomeViewProps> = ({
         </div>
       </div>
 
-      {/* 1.1 LOCATION & RISK HIERARCHY RIBBON */}
-      <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-4 py-2.5 flex flex-wrap items-center gap-2 text-xs text-[#475569]">
-        <div className="flex items-center gap-1.5 font-medium text-[#17233C]">
-          <MapPin className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-          <span>{location.source === 'gps' ? 'Live GPS Location' : 'Selected Location'}:</span>
-          <span className="font-bold text-blue-700">{location.locationName.split(',')[0]}</span>
-        </div>
-        <span className="text-slate-300">→</span>
-        <div className="flex items-center gap-1">
-          <span className="text-slate-500">City:</span>
-          <span className="font-semibold text-[#17233C]">{activeCity.name}</span>
-        </div>
-        <span className="text-slate-300">→</span>
-        <div className="flex items-center gap-1">
-          <span className="text-slate-500">Weather:</span>
-          <span className="font-semibold text-[#17233C]">{tempC}°C ({current.weatherDescription})</span>
-        </div>
-        <span className="text-slate-300">→</span>
-        <div className="flex items-center gap-1">
-          <span className="text-slate-500">Thermal Stress:</span>
-          <span className="font-semibold text-[#17233C]">
-            {analysis?.scientificDetails?.utciStressCategory || 'Strong'} (UTCI {Math.round(analysis?.scientificDetails?.utciC || tempC)}°C)
-          </span>
-        </div>
-        <span className="text-slate-300">→</span>
-        <div className="flex items-center gap-1">
-          <span className="text-slate-500">Personal Risk:</span>
-          <span
-            className="font-bold px-1.5 py-0.5 rounded text-[11px]"
-            style={{ color: riskInfo.color, backgroundColor: riskInfo.bgColor }}
-          >
-            {riskScore}/100 {riskInfo.label}
-          </span>
-        </div>
-      </div>
-
-      {/* 2. MUNICIPAL HOTSPOT: HIGHEST WARD RISK */}
-      {topRiskWard && (
-        <div className="rounded-2xl border border-rose-200 bg-gradient-to-r from-rose-50/80 via-orange-50/70 to-amber-50/50 p-5 shadow-xs">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-black uppercase tracking-wider text-rose-800 bg-rose-200/80 px-2 py-0.5 rounded-md">
-                  MUNICIPAL PRIORITY — HIGHEST RISK WARD
-                </span>
-                <span className="text-xs font-bold text-[#17233C]">
-                  {activeCity.name} Hotspot
-                </span>
-              </div>
-              <h3 className="text-base sm:text-lg font-black text-[#17233C]">
-                HIGHEST WARD RISK: <span className="text-rose-700">{topRiskWard.ward.wardName}</span>{' '}
-                ({topRiskWard.healthRisk.overallScore}/100 • {topRiskWard.healthRisk.category})
-              </h3>
-              <p className="text-xs text-[#64748B] max-w-3xl leading-relaxed">
-                <strong>Main Drivers: </strong>
-                {topRiskWard.riskContributors?.[0] ? `${topRiskWard.riskContributors[0].name} (+${topRiskWard.riskContributors[0].impactPercent}%)` : 'Severe UTCI thermal strain'}
-                {topRiskWard.riskContributors?.[1] ? `, ${topRiskWard.riskContributors[1].name} (+${topRiskWard.riskContributors[1].impactPercent}%)` : ''}
-                {topRiskWard.riskContributors?.[2] ? ` & ${topRiskWard.riskContributors[2].name} (+${topRiskWard.riskContributors[2].impactPercent}%)` : ''} •{' '}
-                UHI microclimate +{topRiskWard.currentConditions.uhiOffset}°C • {(topRiskWard.ward.elderlyPopulation60Plus + topRiskWard.ward.outdoorWorkerPopulation).toLocaleString()} vulnerable residents.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={onNavigateToMap}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
-              >
-                <span>Inspect {activeCity.wards.length} Wards</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
+      {/* GPS Status Message if present */}
+      {gpsStatusMessage && (
+        <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-2.5 rounded-xl text-xs flex items-center justify-between animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <MapPin className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+            <span>{gpsStatusMessage}</span>
           </div>
         </div>
       )}
+
+      {/* 1.1 LOCATION & RISK HIERARCHY RIBBON */}
+      <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-[#475569]">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5 font-medium text-[#17233C]">
+            <MapPin className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+            <span>{location.source === 'gps' ? 'Live GPS Location' : 'Using selected fallback location'}:</span>
+            <span className="font-bold text-blue-700">{location.locationName.split(',')[0]}</span>
+          </div>
+          <span className="text-slate-300">→</span>
+          <div className="flex items-center gap-1">
+            <span className="text-slate-500">City / Region:</span>
+            <span className="font-semibold text-[#17233C]">{activeCity.name}</span>
+          </div>
+          <span className="text-slate-300">→</span>
+          <div className="flex items-center gap-1">
+            <span className="text-slate-500">Weather:</span>
+            <span className="font-semibold text-[#17233C]">{tempC}°C ({current.weatherDescription})</span>
+          </div>
+          <span className="text-slate-300">→</span>
+          <div className="flex items-center gap-1">
+            <span className="text-slate-500">Thermal Stress:</span>
+            <span className="font-semibold text-[#17233C]">
+              {analysis?.scientificDetails?.utciStressCategory || 'Strong'} (UTCI {Math.round(analysis?.scientificDetails?.utciC || tempC)}°C)
+            </span>
+          </div>
+          <span className="text-slate-300">→</span>
+          <div className="flex items-center gap-1">
+            <span className="text-slate-500">Personal Risk:</span>
+            <span
+              className="font-bold px-1.5 py-0.5 rounded text-[11px]"
+              style={{ color: riskInfo.color, backgroundColor: riskInfo.bgColor }}
+            >
+              {riskScore}/100 {riskInfo.label}
+            </span>
+          </div>
+        </div>
+
+        {onRequestGps && location.source !== 'gps' && (
+          <button
+            onClick={onRequestGps}
+            disabled={isLocatingGPS}
+            className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[11px] font-bold border border-emerald-200 flex items-center gap-1 cursor-pointer transition-colors"
+          >
+            <MapPin className="w-3 h-3 text-emerald-600" />
+            <span>{isLocatingGPS ? 'Acquiring GPS...' : 'Switch to Live GPS'}</span>
+          </button>
+        )}
+      </div>
 
       {/* 3. 2-COLUMN HERO: LEFT (YOUR CURRENT RISK) + RIGHT (WHY THIS SCORE?) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -308,14 +298,14 @@ export const HumanHeatHomeView: React.FC<HumanHeatHomeViewProps> = ({
           <div className="flex items-center justify-between">
             <div className="min-w-0 pr-2">
               <span className="text-xs font-bold uppercase tracking-wider text-[#64748B] block truncate">
-                PERSONAL RISK — YOUR LIVE GPS LOCATION
+                {location.source === 'gps' ? 'PERSONAL RISK — YOUR LIVE GPS LOCATION' : 'PERSONAL RISK — SELECTED FALLBACK LOCATION'}
               </span>
               <div className="text-[11px] text-[#64748B] font-medium flex items-center gap-1 mt-0.5">
                 <MapPin className="w-3 h-3 text-blue-600 shrink-0" />
                 <span className="truncate">
                   Detected Ward:{' '}
                   <strong className="text-[#17233C] font-semibold">
-                    {detectedUserWard ? detectedUserWard.wardName : location.locationName.split(',')[0]}
+                    {detectedUserWard ? detectedUserWard.wardName : 'Exact ward boundary data unavailable'}
                   </strong>
                 </span>
               </div>
@@ -621,7 +611,11 @@ export const HumanHeatHomeView: React.FC<HumanHeatHomeViewProps> = ({
       </div>
 
       {/* 5.5 HEALTH IMPACT & MORTALITY RISK (5-DAY EPIDEMIOLOGICAL FORECAST) */}
-      <HealthImpactMortalitySection forecast={mortalityForecast} />
+      <HealthImpactMortalitySection
+        forecastItems={mortalityForecast}
+        locationName={location.locationName}
+        cityName={activeCity.name}
+      />
 
       {/* 6. HOURLY HEAT TIMELINE */}
       <div className="bg-white rounded-2xl border border-[#E2E8F0] p-6 shadow-xs space-y-4">

@@ -16,7 +16,7 @@ import {
   UserLocation,
   UserProfileData,
 } from './types/weather';
-import { fetchRealWeather } from './services/openMeteoService';
+import { fetchRealWeather, reverseGeocode } from './services/openMeteoService';
 import {
   getUserProfile,
   initializeUserProfile,
@@ -56,14 +56,14 @@ import { LocationSetupModal } from './components/location/LocationSetupModal';
 import { AuthScreen } from './components/auth/AuthScreen';
 import { X } from 'lucide-react';
 
-const DEFAULT_INITIAL_LOCATION: UserLocation = {
+const DEFAULT_FALLBACK_LOCATION: UserLocation = {
   latitude: 17.385,
   longitude: 78.4867,
   locationName: 'Hyderabad, Telangana, India',
   city: 'Hyderabad',
   state: 'Telangana',
   country: 'India',
-  source: 'search',
+  source: 'fallback',
   timestamp: new Date().toISOString(),
 };
 
@@ -84,8 +84,11 @@ export function App() {
       const cached = localStorage.getItem('heatshield_active_loc');
       if (cached) return JSON.parse(cached);
     } catch (e) {}
-    return DEFAULT_INITIAL_LOCATION;
+    return DEFAULT_FALLBACK_LOCATION;
   });
+  const [isLocatingGPS, setIsLocatingGPS] = useState<boolean>(false);
+  const [gpsStatusMessage, setGpsStatusMessage] = useState<string | null>(null);
+
   const [savedLocations, setSavedLocations] = useState<SavedLocationItem[]>(() => {
     try {
       const cached = localStorage.getItem('heatshield_saved_places');
@@ -102,6 +105,88 @@ export function App() {
   const [isLoadingWeather, setIsLoadingWeather] = useState<boolean>(false);
   const [isRefreshingWeather, setIsRefreshingWeather] = useState<boolean>(false);
   const [weatherError, setWeatherError] = useState<string | null>(null);
+
+  // Function to request and acquire real browser GPS coordinates
+  const handleRequestBrowserGps = useCallback(async (isManualTrigger = false) => {
+    if (!navigator.geolocation) {
+      if (isManualTrigger) {
+        setGpsStatusMessage('Geolocation is not supported by your browser.');
+      }
+      return;
+    }
+
+    setIsLocatingGPS(true);
+    setGpsStatusMessage(null);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+
+          // Reverse geocode the exact coordinates returned by the browser GPS
+          const place = await reverseGeocode(lat, lng);
+
+          const liveGpsLocation: UserLocation = {
+            latitude: lat,
+            longitude: lng,
+            locationName: place.locationName,
+            city: place.city,
+            state: place.state,
+            country: place.country,
+            source: 'gps',
+            timestamp: new Date().toISOString(),
+          };
+
+          setActiveLocation(liveGpsLocation);
+          try {
+            localStorage.setItem('heatshield_active_loc', JSON.stringify(liveGpsLocation));
+          } catch (e) {}
+
+          setGpsStatusMessage('Live GPS acquired successfully.');
+          setTimeout(() => setGpsStatusMessage(null), 3000);
+        } catch (err) {
+          console.error('Error reverse geocoding real GPS coordinates:', err);
+          const liveGpsLocation: UserLocation = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            locationName: `${position.coords.latitude.toFixed(4)}°N, ${position.coords.longitude.toFixed(4)}°E`,
+            city: 'Current Location',
+            country: 'India',
+            source: 'gps',
+            timestamp: new Date().toISOString(),
+          };
+          setActiveLocation(liveGpsLocation);
+        } finally {
+          setIsLocatingGPS(false);
+        }
+      },
+      (error) => {
+        setIsLocatingGPS(false);
+        console.warn('GPS location access error:', error.message);
+        if (isManualTrigger) {
+          if (error.code === error.PERMISSION_DENIED) {
+            setGpsStatusMessage('GPS permission denied. Using fallback location.');
+          } else if (error.code === error.TIMEOUT) {
+            setGpsStatusMessage('GPS request timed out. Using fallback location.');
+          } else {
+            setGpsStatusMessage('GPS unavailable. Using fallback location.');
+          }
+          setTimeout(() => setGpsStatusMessage(null), 4000);
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0, // Force fresh coordinates, bypass stale browser cache
+      }
+    );
+  }, []);
+
+  // Request real GPS coordinates on initial launch
+  useEffect(() => {
+    handleRequestBrowserGps(false);
+  }, [handleRequestBrowserGps]);
 
   // 1. Listen for Firebase Auth State Changes
   useEffect(() => {
@@ -280,6 +365,8 @@ export function App() {
             setIsOnboardingLocation(false);
             setShowLocationModal(true);
           }}
+          onRequestGps={() => handleRequestBrowserGps(true)}
+          isLocatingGPS={isLocatingGPS}
           onRefreshClick={() => loadWeatherData(activeLocation, true)}
           isRefreshing={isRefreshingWeather}
           alertCount={alertCount}
@@ -298,6 +385,9 @@ export function App() {
               isRefreshing={isRefreshingWeather}
               error={weatherError}
               onRefresh={() => loadWeatherData(activeLocation, true)}
+              onRequestGps={() => handleRequestBrowserGps(true)}
+              isLocatingGPS={isLocatingGPS}
+              gpsStatusMessage={gpsStatusMessage}
               onChangeLocation={() => {
                 setIsOnboardingLocation(false);
                 setShowLocationModal(true);
