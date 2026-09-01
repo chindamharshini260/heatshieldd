@@ -101,6 +101,7 @@ export interface HumanHeatAnalysis {
   heatDurationHours: number; // e.g. 5
   temperature: number;
   apparentTemperature: number;
+  consecutiveHighHeatDays?: number;
   factors: {
     temperature: HeatFactorItem;
     humidity: HeatFactorItem;

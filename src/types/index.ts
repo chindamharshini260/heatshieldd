@@ -50,6 +50,7 @@ export interface WardDemographics {
   outdoorWorkerPopulation: number; // count
   outdoorWorkerRatio: number; // 0-1
   slumInformalHousingRatio: number; // 0-1
+  slumPopulation?: number;
   vegetationIndexNDVI: number; // 0-1 (lower = less green, more concrete)
   imperviousBuiltupRatio: number; // 0-1 (Urban Heat Island factor)
   healthcareFacilitiesCount: number;
@@ -141,10 +142,15 @@ export interface ActiveInterventionConfig {
 }
 
 export interface ResourceConstraints {
-  coolingCentersAvailable: number;
-  mobileUnitsAvailable: number;
-  healthWorkerTeamsAvailable: number;
-  emergencyHospitalBedsAvailable: number;
+  coolingCentersAvailable?: number;
+  mobileUnitsAvailable?: number;
+  healthWorkerTeamsAvailable?: number;
+  emergencyHospitalBedsAvailable?: number;
+  maxCoolingCenters?: number;
+  maxMobileUnits?: number;
+  maxWorkerTeams?: number;
+  maxHospitalBeds?: number;
+  budgetLakhsINR?: number;
 }
 
 export interface OptimizedResourceAllocation {
@@ -152,10 +158,13 @@ export interface OptimizedResourceAllocation {
   wardName: string;
   priorityScore: number;
   rank: number;
+  priorityRank?: number;
   allocatedCoolingCenters: number;
   allocatedMobileUnits: number;
   allocatedHealthWorkerTeams: number;
+  allocatedWorkerTeams?: number;
   allocatedHospitalBeds: number;
+  expectedPopReached?: number;
   rationale: string;
 }
 
@@ -168,6 +177,9 @@ export interface SimulationOutcome {
   mitigatedVulnerableExposed: number;
   baselineHealthRiskIndex: number; // 0-100
   mitigatedHealthRiskIndex: number; // 0-100
+  peopleProtectedCount?: number;
+  riskReductionRatio?: number;
+  mitigatedUtci?: number;
   hospitalizationSurgeBaseline: number; // estimated cases or index
   hospitalizationSurgeMitigated: number;
   overallExposureReductionPercent: number;

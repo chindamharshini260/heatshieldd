@@ -42,47 +42,53 @@ export function calculate5DayHealthImpactForecast(
   }
 
   const dailyItems = weatherData.daily.slice(0, 5);
-  const currentTemp = weatherData.current?.temperature ?? 38;
   const currentRh = weatherData.current?.relativeHumidity ?? 45;
   const currentWind = weatherData.current?.windSpeed ?? 8;
-  const currentSolar = typeof weatherData.current?.solarRadiation === 'number' && !isNaN(weatherData.current.solarRadiation)
-    ? weatherData.current.solarRadiation
-    : 650;
+  const hourlyData = weatherData.hourly || [];
 
-  // Derive demographic vulnerability factor
-  let baseVulnScore = 15;
-  let vulnLevel: 'Low' | 'Moderate' | 'High' | 'Very High' = 'Moderate';
+  // 1. Calculate Demographic & Urban Vulnerability Baseline (0 - 15 pts scale)
+  let rawVulnScore = 4; // modest default baseline
   const vulnFactors: string[] = [];
 
   if (topRiskWard && topRiskWard.ward) {
     const ward = topRiskWard.ward;
-    if (ward.elderlyRatio > 0.11) {
-      baseVulnScore += 5;
+    if (ward.elderlyRatio > 0.12) {
+      rawVulnScore += 4;
       vulnFactors.push(`Elderly demographic (${Math.round(ward.elderlyRatio * 100)}% 60+)`);
+    } else if (ward.elderlyRatio > 0.08) {
+      rawVulnScore += 2;
+      vulnFactors.push(`Elderly cohort (${Math.round(ward.elderlyRatio * 100)}% 60+)`);
     }
-    if (ward.outdoorWorkerRatio > 0.20) {
-      baseVulnScore += 6;
+
+    if (ward.outdoorWorkerRatio > 0.22) {
+      rawVulnScore += 4;
       vulnFactors.push(`Outdoor workforce (${Math.round(ward.outdoorWorkerRatio * 100)}% unshaded labor)`);
+    } else if (ward.outdoorWorkerRatio > 0.14) {
+      rawVulnScore += 2;
+      vulnFactors.push(`Outdoor labor exposure (${Math.round(ward.outdoorWorkerRatio * 100)}%)`);
     }
-    if (ward.populationDensity > 22000) {
-      baseVulnScore += 4;
+
+    if (ward.populationDensity > 25000) {
+      rawVulnScore += 3;
       vulnFactors.push(`High density (${ward.populationDensity.toLocaleString()}/km²)`);
     }
-    if (ward.imperviousBuiltupRatio > 0.8) {
-      baseVulnScore += 3;
-      vulnFactors.push(`Urban Heat Island effect (+${topRiskWard.currentConditions?.uhiOffset || 2.4}°C)`);
+
+    if (ward.imperviousBuiltupRatio > 0.75) {
+      rawVulnScore += 2;
+      vulnFactors.push(`Urban Heat Island effect (+${topRiskWard.currentConditions?.uhiOffset || 2.0}°C)`);
     }
   } else if (activeCity) {
-    baseVulnScore += 10;
-    vulnFactors.push('Urban density & industrial heat exposure');
-    vulnFactors.push('Elevated outdoor labor & transit exposure');
+    rawVulnScore += 3;
+    vulnFactors.push('Urban density & typical regional population exposure');
   } else {
     vulnFactors.push('Standard regional population baseline');
   }
 
-  if (baseVulnScore >= 28) vulnLevel = 'Very High';
-  else if (baseVulnScore >= 20) vulnLevel = 'High';
-  else if (baseVulnScore >= 12) vulnLevel = 'Moderate';
+  // Determine vulnerability qualitative level
+  let vulnLevel: 'Low' | 'Moderate' | 'High' | 'Very High' = 'Low';
+  if (rawVulnScore >= 13) vulnLevel = 'Very High';
+  else if (rawVulnScore >= 9) vulnLevel = 'High';
+  else if (rawVulnScore >= 5) vulnLevel = 'Moderate';
   else vulnLevel = 'Low';
 
   let consecutiveHotDays = 0;
@@ -93,119 +99,163 @@ export function calculate5DayHealthImpactForecast(
     const isToday = idx === 0;
     const dayLabel = isToday ? 'TODAY' : `DAY ${idx + 1}`;
 
-    // Estimate daily meteorological parameters from forecast
-    const estRh = Math.max(20, Math.min(80, Math.round(currentRh + (idx > 0 ? (day.weatherCode > 0 ? 10 : -3) : 0))));
-    const estWind = Math.max(4, Math.round(currentWind + (idx % 2 === 0 ? 1.0 : -0.5)));
-    const estSolar = day.weatherCode === 0 ? 780 : day.weatherCode <= 2 ? 580 : 350;
+    // Extract day-specific hourly points if present
+    const dayHourly = hourlyData.filter(
+      (h) => h.time && (h.time.startsWith(day.date) || h.time.includes(day.date))
+    );
 
-    const utci = computeUTCI(maxT, estRh, estWind, estSolar);
-    const wbgt = computeWBGT(maxT, estRh, estWind, estSolar);
-    const heatIndex = computeHeatIndex(maxT, estRh);
+    let dayRh = currentRh;
+    let dayWind = currentWind;
+    let daySolar = 650;
 
-    // Track cumulative heat persistence
-    if (maxT >= 37.5 || utci >= 37.0) {
-      consecutiveHotDays += 1;
+    if (dayHourly.length > 0) {
+      const dayTemps = dayHourly.map((h) => h.temperature);
+      const maxHourIdx = dayTemps.indexOf(Math.max(...dayTemps));
+      if (maxHourIdx >= 0 && dayHourly[maxHourIdx]) {
+        dayRh = dayHourly[maxHourIdx].relativeHumidity ?? currentRh;
+      }
+      const solarReadings = dayHourly
+        .map((h) => h.solarRadiation)
+        .filter((s): s is number => typeof s === 'number' && !isNaN(s) && s > 0);
+      if (solarReadings.length > 0) {
+        daySolar = Math.max(...solarReadings);
+      } else {
+        daySolar = day.weatherCode === 0 ? 750 : day.weatherCode <= 2 ? 550 : 320;
+      }
     } else {
-      consecutiveHotDays = Math.max(0, consecutiveHotDays - 1);
+      // Realistic variance derived from weather code
+      if (day.weatherCode === 0) {
+        dayRh = Math.max(25, currentRh - 4);
+        daySolar = 750;
+      } else if (day.weatherCode <= 2) {
+        dayRh = currentRh;
+        daySolar = 550;
+      } else {
+        dayRh = Math.min(85, currentRh + 12);
+        daySolar = 320;
+      }
+      dayWind = Math.max(5, currentWind + (idx % 2 === 0 ? 1 : -1));
     }
 
-    // 1. Determine Thermal Stress Category
+    // 2. Exact Biometeorological Model Calculations
+    const utci = computeUTCI(maxT, dayRh, dayWind, daySolar);
+    const wbgt = computeWBGT(maxT, dayRh, dayWind, daySolar);
+    const heatIndex = computeHeatIndex(maxT, dayRh);
+
+    // 3. Thermal Stress Categorization (Standard physiological definitions)
     let thermalStressCategory: 'Low' | 'Moderate' | 'High' | 'Very High' | 'Extreme' = 'Low';
-    if (utci >= 46 || maxT >= 44.5 || wbgt >= 32.5) {
+    if (utci >= 46 || maxT >= 44.0 || wbgt >= 32.5) {
       thermalStressCategory = 'Extreme';
-    } else if (utci >= 38 || maxT >= 41.0 || wbgt >= 29.5) {
+    } else if (utci >= 38 || maxT >= 40.0 || wbgt >= 29.5) {
       thermalStressCategory = 'Very High';
-    } else if (utci >= 32 || maxT >= 36.5 || wbgt >= 27.0) {
+    } else if (utci >= 32 || maxT >= 35.5 || wbgt >= 26.5) {
       thermalStressCategory = 'High';
-    } else if (utci >= 26 || maxT >= 31.0 || wbgt >= 24.0) {
+    } else if (utci >= 26 || maxT >= 30.0 || wbgt >= 22.5) {
       thermalStressCategory = 'Moderate';
     } else {
       thermalStressCategory = 'Low';
     }
 
-    // 2. Base Thermal Strain Score (0 - 55 pts)
+    // 4. Primary Thermal Strain Score (0 - 62 pts)
+    // Continuous, smooth curve from mild (20°C) to extreme heat (>46°C)
     let thermalStrainScore = 0;
     if (utci >= 46) {
-      thermalStrainScore = 48 + Math.min(7, (utci - 46) * 1.5);
+      thermalStrainScore = 52 + Math.min(10, (utci - 46) * 1.5);
     } else if (utci >= 38) {
-      thermalStrainScore = 34 + ((utci - 38) / 8) * 14;
+      thermalStrainScore = 38 + ((utci - 38) / 8) * 14;
     } else if (utci >= 32) {
-      thermalStrainScore = 20 + ((utci - 32) / 6) * 14;
+      thermalStrainScore = 22 + ((utci - 32) / 6) * 16;
     } else if (utci >= 26) {
-      thermalStrainScore = 8 + ((utci - 26) / 6) * 12;
+      thermalStrainScore = 10 + ((utci - 26) / 6) * 12;
+    } else if (utci >= 20) {
+      thermalStrainScore = Math.max(0, ((utci - 20) / 6) * 10);
     } else {
-      thermalStrainScore = Math.max(2, (utci / 26) * 8);
+      thermalStrainScore = 0;
     }
 
-    // 3. Nighttime Recovery Penalty (0 - 15 pts)
+    // Supplementary adjustment for high wet-bulb temperature or extreme Heat Index
+    if (wbgt >= 31.0) thermalStrainScore += 4;
+    else if (wbgt >= 28.5) thermalStrainScore += 2;
+
+    if (heatIndex >= 44.0) thermalStrainScore += 3;
+    else if (heatIndex >= 38.0) thermalStrainScore += 1.5;
+
+    // 5. Nocturnal Non-Recovery Penalty (0 - 12 pts)
+    // When nighttime minimum temperatures stay high, the body cannot shed daytime heat
     let nightPenalty = 0;
-    if (minT >= 28.5) nightPenalty = 14;
-    else if (minT >= 26.0) nightPenalty = 9;
-    else if (minT >= 23.5) nightPenalty = 4;
+    if (minT >= 29.0) nightPenalty = 12;
+    else if (minT >= 27.0) nightPenalty = 8;
+    else if (minT >= 24.5) nightPenalty = 4;
+    else if (minT >= 22.0) nightPenalty = 2;
+    else nightPenalty = 0;
 
-    // 4. Cumulative Heat Persistence Penalty (0 - 15 pts)
-    const persistencePenalty = Math.min(15, consecutiveHotDays * 3.5);
+    // 6. Cumulative Heat Persistence (0 - 10 pts)
+    if (maxT >= 37.5 || utci >= 37.0) {
+      consecutiveHotDays += 1;
+    } else if (maxT < 34.0) {
+      consecutiveHotDays = Math.max(0, consecutiveHotDays - 2);
+    }
+    const persistencePenalty = Math.min(10, Math.max(0, consecutiveHotDays - 1) * 2.5);
 
-    // 5. Aggregate Health & Mortality Risk Score (0 - 100)
-    // Derived from: Thermal Strain (50%) + Vulnerability (25%) + Night Strain & Persistence (25%)
-    const rawTotal =
-      thermalStrainScore * 0.95 +
-      (baseVulnScore * 0.7) +
-      nightPenalty * 0.75 +
-      persistencePenalty * 0.6;
+    // 7. Modulated Vulnerability Contribution (0 - 16 pts)
+    // Epidemiological principle: vulnerability only amplifies risk when thermal stress is present
+    const thermalActivation = Math.min(1.0, Math.max(0.05, (utci - 22) / 16));
+    const activeVulnContribution = rawVulnScore * thermalActivation;
 
-    const riskScore = Math.max(5, Math.min(98, Math.round(rawTotal)));
+    // 8. Total Multi-Factor Risk Score (0 - 100)
+    const rawTotal = thermalStrainScore + nightPenalty + persistencePenalty + activeVulnContribution;
+    const finalScore = Math.max(0, Math.min(100, Math.round(rawTotal)));
 
-    // 6. Category mapping
+    // 9. Standardized, Consistent Category Mapping (0-25 Low, 26-50 Moderate, 51-75 High, 76-100 Very High)
     let riskCategory: 'Low' | 'Moderate' | 'High' | 'Very High' | 'Extreme' = 'Low';
-    let color = '#16A34A';
+    let color = '#16A34A'; // Green
     let badgeBg = '#F0FDF4';
     let badgeBorder = '#BBF7D0';
 
-    if (riskScore >= 80) {
+    if (finalScore >= 85) {
       riskCategory = 'Extreme';
-      color = '#B91C1C';
+      color = '#B91C1C'; // Dark Red
       badgeBg = '#FEF2F2';
       badgeBorder = '#FECACA';
-    } else if (riskScore >= 60) {
+    } else if (finalScore >= 76) {
       riskCategory = 'Very High';
-      color = '#DC2626';
+      color = '#DC2626'; // Red
       badgeBg = '#FEF2F2';
       badgeBorder = '#FECACA';
-    } else if (riskScore >= 40) {
+    } else if (finalScore >= 51) {
       riskCategory = 'High';
-      color = '#EA580C';
+      color = '#EA580C'; // Orange
       badgeBg = '#FFF7ED';
       badgeBorder = '#FED7AA';
-    } else if (riskScore >= 20) {
+    } else if (finalScore >= 26) {
       riskCategory = 'Moderate';
-      color = '#D97706';
+      color = '#D97706'; // Amber
       badgeBg = '#FFFBEB';
       badgeBorder = '#FDE68A';
     } else {
       riskCategory = 'Low';
-      color = '#16A34A';
+      color = '#16A34A'; // Green
       badgeBg = '#F0FDF4';
       badgeBorder = '#BBF7D0';
     }
 
-    // 7. Contextual Clinical & Health Impact
+    // 10. Contextual, Scientifically Grounded Clinical Health Impact Text
     let expectedHealthImpact = '';
-    if (riskCategory === 'Extreme') {
+    if (finalScore >= 85) {
       expectedHealthImpact =
-        'Critical heat emergency: surge in severe heat stroke, acute kidney injury, cardiovascular collapse, and sharp spike in excess emergency hospitalizations.';
-    } else if (riskCategory === 'Very High') {
+        'Critical heat emergency: steep rise in heat stroke, cardiovascular collapse, and acute hospital admissions for vulnerable populations.';
+    } else if (finalScore >= 76) {
       expectedHealthImpact =
-        'Severe physiological strain: elevated heat exhaustion among outdoor workers, acute dehydration, and high risk of cardiovascular exacerbation in elderly residents.';
-    } else if (riskCategory === 'High') {
+        'Severe physiological burden: high risk of heat exhaustion, dehydration in outdoor laborers, and cardiovascular strain in seniors.';
+    } else if (finalScore >= 51) {
       expectedHealthImpact =
-        'Moderate-to-high health impact: noticeable spike in clinic admissions for heat cramps, dizziness, syncope, and respiratory distress in vulnerable groups.';
-    } else if (riskCategory === 'Moderate') {
+        'Elevated health risk: increased incidence of heat cramps, dizziness, syncope, and fatigue. Shaded rest intervals and hydration needed.';
+    } else if (finalScore >= 26) {
       expectedHealthImpact =
-        'Mild-to-moderate strain: fatigue, mild dehydration, and reduced physical work capacity during peak unshaded sun hours.';
+        'Moderate physiological strain: mild thermal fatigue during unshaded peak hours. Routine hydration and sensible pacing advised.';
     } else {
       expectedHealthImpact =
-        'Low physiological risk: baseline hydration and standard sun protection sufficient for normal daily activities.';
+        'Low health risk: comfortable thermal conditions with minimal thermoregulatory strain. Standard daily routines can proceed safely.';
     }
 
     return {
@@ -220,8 +270,8 @@ export function calculate5DayHealthImpactForecast(
       heatIndex: Math.round(heatIndex),
       thermalStressCategory,
       vulnerabilityLevel: vulnLevel,
-      healthRiskScore: riskScore,
-      mortalityRiskScore: riskScore,
+      healthRiskScore: finalScore,
+      mortalityRiskScore: finalScore,
       riskCategory,
       expectedHealthImpact,
       vulnerabilityFactors: vulnFactors,
@@ -231,4 +281,5 @@ export function calculate5DayHealthImpactForecast(
     };
   });
 }
+
 

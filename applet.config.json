@@ -1,8 +1,15 @@
 {
-  "name": "react-example",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "name": "HeatShield AI",
+  "version": "1.0.0",
+  "description": "Comprehensive configuration and dependency specification for HeatShield AI biometeorological & heat health monitoring application",
+  "runtime": {
+    "engine": "node",
+    "nodeVersion": ">=18.0.0",
+    "port": 3000,
+    "host": "0.0.0.0",
+    "protocol": "http"
+  },
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
@@ -38,5 +45,22 @@
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2"
+  },
+  "features": [
+    "Real-time Open-Meteo biometeorological data integration",
+    "Personalized Heat & Thermal Strain (UTCI, WBGT, Heat Index) modeling",
+    "Accurate GPS geolocation with high-accuracy live browser updates",
+    "Spatial Municipal Microclimate & Ward Analytics for Indian metropolitan areas",
+    "Actionable 5-Day Heat Impact Forecast & Hydration/Precaution Planners",
+    "Offline/Cloud Persistence with Firebase Firestore authentication & user profile syncing"
+  ],
+  "permissions": [
+    "geolocation"
+  ],
+  "environment": {
+    "required": [],
+    "optional": [
+      "GEMINI_API_KEY"
+    ]
   }
 }

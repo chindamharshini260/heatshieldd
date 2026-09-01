@@ -120,6 +120,27 @@ export const HealthImpactMortalitySection: React.FC<HealthImpactMortalitySection
               </span>
             </div>
           </div>
+
+          {/* Standardized Threshold Reference */}
+          <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-[#E2E8F0] text-[11px] text-slate-600">
+            <span className="font-bold text-slate-700">Risk Scale:</span>
+            <span className="inline-flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <strong>0–25</strong> Low
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+              <strong>26–50</strong> Moderate
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+              <strong>51–75</strong> High
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-red-600"></span>
+              <strong>76–100</strong> Very High
+            </span>
+          </div>
         </div>
       )}
 

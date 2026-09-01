@@ -169,10 +169,11 @@ export function optimize_resource_allocation(
  * based on evidence-supported equations.
  */
 export function simulate_intervention_outcomes(
-  wardProfiles: WardImpactProfile[],
+  wardProfilesInput: WardImpactProfile[] | WardImpactProfile,
   activeConfig: ActiveInterventionConfig,
   scenarioName: string = 'Custom Scenario'
 ): SimulationOutcome {
+  const wardProfiles = Array.isArray(wardProfilesInput) ? wardProfilesInput : [wardProfilesInput];
   let baselineTotalExposed = 0;
   let mitigatedTotalExposed = 0;
 

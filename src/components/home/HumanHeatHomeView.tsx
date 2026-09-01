@@ -123,8 +123,10 @@ export const HumanHeatHomeView: React.FC<HumanHeatHomeViewProps> = ({
 
   // Compute 5-day health & mortality risk forecast
   const mortalityForecast = useMemo(() => {
-    return calculate5DayHealthImpactForecast(weatherData, activeCity, topRiskWard);
-  }, [weatherData, activeCity, topRiskWard]);
+    const activeWardProfile =
+      (detectedUserWard && wardProfiles.find((p) => p.ward.wardId === detectedUserWard.wardId)) || topRiskWard;
+    return calculate5DayHealthImpactForecast(weatherData, activeCity, activeWardProfile);
+  }, [weatherData, activeCity, detectedUserWard, wardProfiles, topRiskWard]);
 
   if (isLoading && !weatherData) {
     return (
